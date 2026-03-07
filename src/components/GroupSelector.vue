@@ -42,7 +42,6 @@ onMounted(() => {
         {{ group.name }}
       </option>
     </select>
-    <p>Selected group: {{ modelValue }}</p>
   </div>
 </template>
 <style scoped>

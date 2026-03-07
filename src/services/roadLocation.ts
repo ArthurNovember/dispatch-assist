@@ -17,6 +17,115 @@ type ArcGisQueryResponse = {
   features?: ArcGisFeature[];
 };
 
+export type ResolvedRoadPoint = {
+  road: string | null;
+  km: number | null;
+  lat: number;
+  lng: number;
+};
+
+function escapeSqlString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function buildRoadKmQueryUrl(
+  road: string,
+  km: number,
+  kmField: string,
+): string {
+  const minKm = km - 2;
+  const maxKm = km + 2;
+
+  const params = new URLSearchParams({
+    f: "json",
+    where:
+      `SILNICE LIKE '${escapeSqlString(road)}%' ` +
+      `AND ${kmField} >= ${minKm} AND ${kmField} <= ${maxKm}`,
+    outFields: "*",
+    returnGeometry: "true",
+    outSR: "4326",
+  });
+
+  return `${RSD_BASE}/${HIGHWAY_MARKERS_LAYER_ID}/query?${params.toString()}`;
+}
+
+async function queryRoadKmFeatures(
+  road: string,
+  km: number,
+): Promise<ArcGisFeature[]> {
+  const urls = [
+    buildRoadKmQueryUrl(road, km, "HODN_KM"),
+    buildRoadKmQueryUrl(road, km, "HODN_KMK"),
+  ];
+
+  const results = await Promise.allSettled(
+    urls.map(async (url) => {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`RSD request failed with status ${response.status}`);
+      }
+
+      const data = (await response.json()) as ArcGisQueryResponse;
+      return data.features ?? [];
+    }),
+  );
+
+  return results.flatMap((result) =>
+    result.status === "fulfilled" ? result.value : [],
+  );
+}
+
+export async function resolveRoadLocationToCoordinates(
+  road: string,
+  km: number,
+): Promise<ResolvedRoadPoint | null> {
+  const features = await queryRoadKmFeatures(road, km);
+
+  if (features.length === 0) {
+    return null;
+  }
+
+  let bestFeature: ArcGisFeature | null = null;
+  let bestDiff = Number.POSITIVE_INFINITY;
+
+  for (const feature of features) {
+    const attrs = normalizeAttributeKeys(feature.attributes);
+    const featureRoad = extractRoad(attrs);
+    const featureKm = extractKm(attrs);
+
+    if (!featureRoad || featureKm === null) continue;
+    if (featureRoad !== road) continue;
+
+    const diff = Math.abs(featureKm - km);
+
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestFeature = feature;
+    }
+  }
+
+  if (!bestFeature) {
+    return null;
+  }
+
+  const attrs = normalizeAttributeKeys(bestFeature.attributes);
+  const point = getPoint(bestFeature);
+  const resolvedRoad = extractRoad(attrs);
+  const resolvedKm = extractKm(attrs);
+
+  if (!point || !resolvedRoad || resolvedKm === null) {
+    return null;
+  }
+
+  return {
+    road: resolvedRoad,
+    km: resolvedKm,
+    lat: point.lat,
+    lng: point.lng,
+  };
+}
+
 const RSD_BASE =
   "https://geoportal.rsd.cz/arcgis/rest/services/PrezentaceULS/MapServer";
 

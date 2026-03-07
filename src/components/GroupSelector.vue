@@ -50,5 +50,7 @@ onMounted(() => {
   border: 1px solid #ddd;
   padding: 16px;
   margin-bottom: 16px;
+  height: 100%;
+  border-radius: 16px;
 }
 </style>

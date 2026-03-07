@@ -17,7 +17,11 @@ import VehicleTripsTable from "../components/VehicleTripsTable.vue";
 import AddressSearch from "../components/AddressSearch.vue";
 import { calculateEtaMinutes, formatEta } from "../utils/eta";
 import { getRoadRoute } from "../services/routing";
-import { detectRoadLocationFromCoordinates } from "../services/roadLocation";
+
+import {
+  detectRoadLocationFromCoordinates,
+  resolveRoadLocationToCoordinates,
+} from "../services/roadLocation";
 const vehicleRoute = ref<VehicleHistoryPoint[]>([]);
 const isLoadingRoute = ref(false);
 const routeError = ref("");
@@ -41,6 +45,54 @@ const detectedRoadLocation = ref<{
 const isLoadingRoadLocation = ref(false);
 const roadLocationError = ref("");
 
+const manualRoad = ref("");
+const manualKm = ref("");
+const manualDirection = ref("");
+
+const roadResolveError = ref("");
+const isResolvingRoadLocation = ref(false);
+
+async function applyRoadLocationToMap() {
+  roadResolveError.value = "";
+
+  const road = manualRoad.value.trim().toUpperCase();
+  const km = Number(manualKm.value.replace(",", "."));
+
+  if (!road) {
+    roadResolveError.value = "Enter a road";
+    return;
+  }
+
+  if (!Number.isFinite(km)) {
+    roadResolveError.value = "Enter a valid KM";
+    return;
+  }
+
+  isResolvingRoadLocation.value = true;
+
+  try {
+    const result = await resolveRoadLocationToCoordinates(road, km);
+
+    if (!result) {
+      roadResolveError.value = "No matching road location found";
+      return;
+    }
+
+    dispatchLocation.lat = result.lat;
+    dispatchLocation.lng = result.lng;
+
+    manualRoad.value = result.road ?? road;
+    manualKm.value = result.km !== null ? result.km.toFixed(1) : manualKm.value;
+  } catch (error) {
+    roadResolveError.value =
+      error instanceof Error
+        ? error.message
+        : "Failed to resolve road location";
+  } finally {
+    isResolvingRoadLocation.value = false;
+  }
+}
+
 async function loadRoadLocationFromIncident() {
   if (dispatchLocation.lat === null || dispatchLocation.lng === null) {
     detectedRoadLocation.value = null;
@@ -58,6 +110,11 @@ async function loadRoadLocationFromIncident() {
     );
 
     detectedRoadLocation.value = result;
+    manualRoad.value = result.road ?? "";
+    manualKm.value = result.km !== null ? result.km.toFixed(1) : "";
+
+    manualRoad.value = result.road ?? "";
+    manualKm.value = result.km !== null ? result.km.toFixed(1) : "";
   } catch (error) {
     roadLocationError.value =
       error instanceof Error ? error.message : "Failed to detect road location";
@@ -167,7 +224,6 @@ const vehiclesError = ref("");
 function onVehicleSelect(vehicle: Vehicle) {
   selectedVehicle.value = vehicle;
 }
-const manualDirection = ref("");
 
 const filters = reactive({
   radiusKm: 99999,
@@ -284,31 +340,36 @@ watch(
         <p v-else-if="isLoadingRoadLocation">Detecting road location...</p>
         <p v-else-if="roadLocationError">{{ roadLocationError }}</p>
 
-        <div v-else-if="detectedRoadLocation" class="road-meta">
-          <div class="road-meta-row">
-            <span class="road-meta-label">Road</span>
-            <strong>{{ detectedRoadLocation.road || "—" }}</strong>
-          </div>
-
-          <div class="road-meta-row">
-            <span class="road-meta-label">KM</span>
-            <strong>
-              {{
-                detectedRoadLocation.km !== null
-                  ? detectedRoadLocation.km.toFixed(1)
-                  : "—"
-              }}
-            </strong>
-          </div>
-
-          <div class="info-row">
-            <input
-              v-model="manualDirection"
-              placeholder="Direction..."
-              class="direction-input"
-            />
-          </div>
+        <div class="road-meta-row">
+          <span class="road-meta-label">Road</span>
+          <input v-model="manualRoad" class="road-input" placeholder="D1" />
         </div>
+
+        <div class="road-meta-row">
+          <span class="road-meta-label">KM</span>
+          <input v-model="manualKm" class="road-input" placeholder="50.0" />
+        </div>
+
+        <div class="road-meta-row">
+          <span class="road-meta-label">Direction</span>
+          <input
+            v-model="manualDirection"
+            class="road-input"
+            placeholder="eg. Praha..."
+          />
+        </div>
+
+        <div class="road-actions">
+          <button class="primary-button" @click="applyRoadLocationToMap">
+            {{
+              isResolvingRoadLocation ? "Locating..." : "Set incident from road"
+            }}
+          </button>
+        </div>
+
+        <p v-if="roadResolveError" class="error-text">
+          {{ roadResolveError }}
+        </p>
       </div>
     </section>
 
@@ -580,11 +641,13 @@ watch(
   border-radius: 12px;
   background: var(--panel-soft);
   border: 1px solid var(--border);
+  margin: 5px;
 }
 
 .road-meta-label {
   color: var(--text-soft);
   font-size: 14px;
+  padding: 10px;
 }
 
 .direction-input {
@@ -630,7 +693,11 @@ watch(
   border-radius: var(--radius);
   padding: 18px;
   box-shadow: var(--shadow);
-  height: 15vw;
+  height: 24vw;
   width: 40%;
+}
+
+.primary-button {
+  margin-top: 10px;
 }
 </style>

@@ -2,6 +2,9 @@
 import { ref } from "vue";
 import { searchAddress } from "../services/geocoding";
 import type { GeocodingResult } from "../types/gps";
+
+const query = defineModel<string>({ default: "" });
+
 const emit = defineEmits<{
   (
     e: "select-address",
@@ -9,14 +12,16 @@ const emit = defineEmits<{
   ): void;
 }>();
 
-const query = ref("");
 const results = ref<GeocodingResult[]>([]);
 const isLoading = ref(false);
 const errorMessage = ref("");
+
 async function onSearch() {
   if (!query.value.trim()) return;
+
   isLoading.value = true;
   errorMessage.value = "";
+
   try {
     results.value = await searchAddress(query.value);
   } catch (error) {
@@ -27,6 +32,7 @@ async function onSearch() {
     isLoading.value = false;
   }
 }
+
 function selectResult(result: GeocodingResult) {
   emit("select-address", result);
   results.value = [];

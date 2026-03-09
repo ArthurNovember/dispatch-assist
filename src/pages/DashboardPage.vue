@@ -32,6 +32,8 @@ const tripsError = ref("");
 const selectedVehicleRoadRoute = ref<{ lat: number; lng: number }[]>([]);
 const isLoadingRoadRoute = ref(false);
 const roadRouteError = ref("");
+const selectedAddressLabel = ref("");
+const addressQuery = ref("");
 const roadRouteSummary = ref<{
   distanceMeters: number;
   durationSeconds: number;
@@ -162,7 +164,7 @@ function createIncident() {
     location: {
       lat: dispatchLocation.lat,
       lng: dispatchLocation.lng,
-      addressLabel: "",
+      addressLabel: addressQuery.value,
     },
 
     assignedVehicle: selectedVehicle.value
@@ -185,7 +187,7 @@ function createIncident() {
   manualRoad.value = "";
   manualKm.value = "";
   manualDirection.value = "";
-
+  addressQuery.value = "";
   dispatchLocation.lat = null;
   dispatchLocation.lng = null;
 
@@ -226,6 +228,10 @@ async function applyRoadLocationToMap() {
 
     manualRoad.value = result.road ?? road;
     manualKm.value = result.km !== null ? result.km.toFixed(1) : manualKm.value;
+    addressQuery.value =
+      result.km !== null
+        ? `${result.road} km ${result.km.toFixed(1)}`
+        : (result.road ?? "");
   } catch (error) {
     roadResolveError.value =
       error instanceof Error
@@ -242,6 +248,15 @@ function openIncident(incidentId: string) {
 
   selectedIncidentId.value = incident.id;
 
+  if (incident.assignedVehicle) {
+    selectedVehicle.value =
+      vehicles.value.find(
+        (vehicle) => String(vehicle.id) === incident.assignedVehicle?.id,
+      ) ?? null;
+  } else {
+    selectedVehicle.value = null;
+  }
+
   incidentForm.clientName = incident.clientName;
   incidentForm.clientPhone = incident.clientPhone;
   incidentForm.clientLicensePlate = incident.clientLicensePlate;
@@ -254,8 +269,13 @@ function openIncident(incidentId: string) {
 
   dispatchLocation.lat = incident.location.lat;
   dispatchLocation.lng = incident.location.lng;
-
+  selectedAddressLabel.value = incident.location.addressLabel ?? "";
+  addressQuery.value = incident.location.addressLabel ?? "";
   closeMenu();
+}
+
+function isHighwayRoad(road: string | null): boolean {
+  return typeof road === "string" && /^D\d+$/i.test(road.trim());
 }
 
 async function loadRoadLocationFromIncident() {
@@ -274,11 +294,12 @@ async function loadRoadLocationFromIncident() {
       dispatchLocation.lng,
     );
 
-    if (result.road || result.km !== null) {
-      detectedRoadLocation.value = result;
+    detectedRoadLocation.value = result;
+
+    if (isHighwayRoad(result.road)) {
       manualRoad.value = result.road ?? "";
       manualKm.value = result.km !== null ? result.km.toFixed(1) : "";
-      manualDirection.value = result.direction ?? "";
+      manualDirection.value = "";
       return;
     }
 
@@ -294,7 +315,7 @@ async function loadRoadLocationFromIncident() {
       label: fallback?.label ?? "Unknown location",
     };
 
-    manualRoad.value = fallback?.road ?? "";
+    manualRoad.value = "";
     manualKm.value = "";
     manualDirection.value = "";
   } catch (error) {
@@ -352,6 +373,7 @@ async function loadRoadRouteToSelectedVehicle() {
 function onAddressSelect(point: { lat: number; lng: number; label: string }) {
   dispatchLocation.lat = point.lat;
   dispatchLocation.lng = point.lng;
+  addressQuery.value = point.label;
 }
 
 async function loadSelectedVehicleTrips() {
@@ -376,21 +398,19 @@ async function loadSelectedVehicleTrips() {
 
 function startNewIncident() {
   selectedIncidentId.value = null;
-
+  selectedIncidentId.value = null;
+  addressQuery.value = "";
+  manualRoad.value = "";
+  manualKm.value = "";
+  manualDirection.value = "";
+  dispatchLocation.lat = null;
+  dispatchLocation.lng = null;
+  selectedVehicle.value = null;
   incidentForm.clientName = "";
   incidentForm.clientPhone = "";
   incidentForm.clientLicensePlate = "";
   incidentForm.vehicleIssue = "";
   incidentForm.operatorNote = "";
-
-  manualRoad.value = "";
-  manualKm.value = "";
-  manualDirection.value = "";
-
-  dispatchLocation.lat = null;
-  dispatchLocation.lng = null;
-
-  selectedVehicle.value = null;
 
   closeMenu();
 }
@@ -475,9 +495,21 @@ const nearestVehicles = computed<VehicleWithDistance[]>(() => {
     .sort((a, b) => a.distanceKm - b.distanceKm);
 });
 
-function onIncidentSelect(point: { lat: number; lng: number }) {
+async function onIncidentSelect(point: { lat: number; lng: number }) {
   dispatchLocation.lat = point.lat;
   dispatchLocation.lng = point.lng;
+
+  addressQuery.value = "";
+
+  try {
+    const result = await reverseGeocode(point.lat, point.lng);
+
+    if (result?.label) {
+      addressQuery.value = result.label;
+    }
+  } catch (error) {
+    console.error("Reverse geocoding failed", error);
+  }
 }
 async function loadVehicles(groupCode: string) {
   isLoadingVehicles.value = true;
@@ -568,7 +600,7 @@ watch(
                 {{
                   incident.km !== null
                     ? `${incident.road} km ${incident.km.toFixed(1)}`
-                    : incident.road
+                    : incident.location.addressLabel || incident.road
                 }}
               </p>
               <p>
@@ -632,7 +664,10 @@ watch(
     </div>
     <section class="top-bar">
       <div class="adressPanel">
-        <AddressSearch @select-address="onAddressSelect" />
+        <AddressSearch
+          v-model="addressQuery"
+          @select-address="onAddressSelect"
+        />
       </div>
       <div class="incidentPanel">
         <div class="panel-header">
@@ -735,7 +770,12 @@ watch(
             <li
               v-for="vehicle in filteredNearestVehicles.slice(0, 10)"
               :key="vehicle.id"
-              class="nearest-item"
+              :class="[
+                'nearest-item',
+                {
+                  'nearest-item--selected': selectedVehicle?.id === vehicle.id,
+                },
+              ]"
               @click="onVehicleSelect(vehicle)"
             >
               <div class="nearest-main">
@@ -770,7 +810,7 @@ watch(
         :error-message="tripsError"
       />
     </div>
-    <div>
+    <div v-if="selectedIncidentId === null">
       <button class="primary-button" @click="createIncident">
         Create incident
       </button>
@@ -1138,5 +1178,22 @@ watch(
   width: 100%;
   text-align: left;
   cursor: pointer;
+}
+
+.nearest-item--selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
+  position: relative;
+}
+
+.nearest-item--selected::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 999px;
 }
 </style>

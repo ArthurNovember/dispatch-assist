@@ -35,6 +35,8 @@ export function useIncidents({
   const selectedIncidentId = ref<string | null>(null);
   const isMenuOpen = ref(false);
 
+  const isEditingIncident = computed(() => selectedIncidentId.value !== null);
+
   function closeMenu() {
     isMenuOpen.value = false;
   }
@@ -57,33 +59,48 @@ export function useIncidents({
     );
   });
 
-  function createIncident() {
+  function validateIncidentForm(): { km: number | null } | null {
     createIncidentError.value = "";
 
     if (!incidentForm.clientName.trim()) {
       createIncidentError.value = "Enter client name";
-      return;
+      return null;
     }
 
     if (!incidentForm.clientPhone.trim()) {
       createIncidentError.value = "Enter client phone";
-      return;
+      return null;
     }
 
     if (dispatchLocation.lat === null || dispatchLocation.lng === null) {
       createIncidentError.value = "Select incident location on map";
-      return;
+      return null;
     }
-
-    const road = manualRoad.value.trim() || "Unknown road";
 
     const kmValue = manualKm.value.trim();
     const km = kmValue === "" ? null : Number(kmValue.replace(",", "."));
 
     if (kmValue !== "" && !Number.isFinite(km)) {
       createIncidentError.value = "Enter valid KM";
-      return;
+      return null;
     }
+
+    return { km };
+  }
+
+  function buildAssignedVehicle() {
+    return selectedVehicle.value
+      ? {
+          id: String(selectedVehicle.value.id),
+          name: selectedVehicle.value.name,
+          spz: selectedVehicle.value.spz ?? "",
+        }
+      : null;
+  }
+
+  function createIncident() {
+    const validated = validateIncidentForm();
+    if (!validated) return;
 
     const incident: DispatchIncident = {
       id: generateIncidentId(),
@@ -97,8 +114,8 @@ export function useIncidents({
       vehicleIssue: incidentForm.vehicleIssue.trim(),
       operatorNote: incidentForm.operatorNote.trim(),
 
-      road,
-      km,
+      road: manualRoad.value.trim() || "Unknown road",
+      km: validated.km,
       direction: manualDirection.value.trim(),
 
       location: {
@@ -107,13 +124,7 @@ export function useIncidents({
         addressLabel: addressQuery.value,
       },
 
-      assignedVehicle: selectedVehicle.value
-        ? {
-            id: String(selectedVehicle.value.id),
-            name: selectedVehicle.value.name,
-            spz: selectedVehicle.value.spz ?? "",
-          }
-        : null,
+      assignedVehicle: buildAssignedVehicle(),
     };
 
     incidents.value.unshift(incident);
@@ -124,6 +135,52 @@ export function useIncidents({
 
     selectedIncidentId.value = incident.id;
     isMenuOpen.value = true;
+  }
+
+  function updateIncident() {
+    if (!selectedIncidentId.value) {
+      createIncidentError.value = "No incident selected for editing";
+      return;
+    }
+
+    const validated = validateIncidentForm();
+    if (!validated) return;
+
+    const incidentIndex = incidents.value.findIndex(
+      (incident) => incident.id === selectedIncidentId.value,
+    );
+
+    if (incidentIndex === -1) {
+      createIncidentError.value = "Selected incident was not found";
+      return;
+    }
+
+    const existingIncident = incidents.value[incidentIndex]!;
+    incidents.value[incidentIndex] = {
+      ...existingIncident,
+      updatedAt: new Date().toISOString(),
+      status: selectedVehicle.value ? "assigned" : "new",
+
+      clientName: incidentForm.clientName.trim(),
+      clientPhone: incidentForm.clientPhone.trim(),
+      clientLicensePlate: incidentForm.clientLicensePlate.trim(),
+      vehicleIssue: incidentForm.vehicleIssue.trim(),
+      operatorNote: incidentForm.operatorNote.trim(),
+
+      road: manualRoad.value.trim() || "Unknown road",
+      km: validated.km,
+      direction: manualDirection.value.trim(),
+
+      location: {
+        lat: dispatchLocation.lat,
+        lng: dispatchLocation.lng,
+        addressLabel: addressQuery.value,
+      },
+
+      assignedVehicle: buildAssignedVehicle(),
+    };
+
+    createIncidentError.value = "";
   }
 
   function openIncident(
@@ -162,10 +219,12 @@ export function useIncidents({
     incidentSearch,
     createIncidentError,
     selectedIncidentId,
+    isEditingIncident,
     isMenuOpen,
     filteredIncidents,
     closeMenu,
     createIncident,
+    updateIncident,
     openIncident,
     startNewIncident,
   };

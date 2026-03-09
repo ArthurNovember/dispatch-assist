@@ -1,17 +1,18 @@
 <script setup lang="ts">
 const props = defineProps<{
   errorMessage: string;
+  buttonLabel: string;
 }>();
 
 const emit = defineEmits<{
-  (e: "create-incident"): void;
+  (e: "submit"): void;
 }>();
 </script>
 
 <template>
   <div class="actions">
-    <button class="primary-button" @click="emit('create-incident')">
-      Create incident
+    <button class="app-button" @click="emit('submit')">
+      {{ props.buttonLabel }}
     </button>
 
     <p v-if="props.errorMessage" class="error-text">
@@ -25,17 +26,6 @@ const emit = defineEmits<{
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.actions button {
-  background-color: rgb(19, 76, 174);
-  color: white;
-  border: 0px;
-  box-shadow: var(--shadow);
-}
-
-.actions button:hover {
-  cursor: pointer;
 }
 
 .error-text {

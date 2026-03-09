@@ -86,10 +86,12 @@ const {
   incidentSearch,
   createIncidentError,
   selectedIncidentId,
+  isEditingIncident,
   isMenuOpen,
   filteredIncidents,
   closeMenu,
   createIncident,
+  updateIncident,
   openIncident,
   startNewIncident,
 } = useIncidents({
@@ -138,6 +140,15 @@ async function onIncidentSelect(point: { lat: number; lng: number }) {
 
 function handleVehicleSelect(vehicle: VehicleWithDistance) {
   onVehicleSelect(vehicle);
+}
+
+function handleIncidentSubmit() {
+  if (isEditingIncident.value) {
+    updateIncident();
+    return;
+  }
+
+  createIncident();
 }
 
 watch(
@@ -277,11 +288,10 @@ watch(
         :error-message="tripsError"
       />
     </div>
-
     <CreateIncidentActions
-      v-if="selectedIncidentId === null"
       :error-message="createIncidentError"
-      @create-incident="createIncident"
+      :button-label="isEditingIncident ? 'Save changes' : 'Create incident'"
+      @submit="handleIncidentSubmit"
     />
   </div>
 </template>

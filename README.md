@@ -66,6 +66,7 @@ The entire project was built using AI-assisted development.
 Main tools used:
 
 - **ChatGPT**
+- **Cursor AI**
 
 Typical workflow:
 

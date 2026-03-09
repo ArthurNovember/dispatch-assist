@@ -65,7 +65,9 @@ function onOnlineOnlyChange(event: Event) {
 .filter-panel {
   border: 1px solid #ddd;
   padding: 16px;
+  border-radius: 12px;
   margin-bottom: 16px;
+  background-color: var(--panel);
 }
 .field {
   margin-bottom: 12px;

@@ -43,4 +43,21 @@ button,
 input,
 select {
   font: inherit;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fff;
+}
+
+button {
+  border: none;
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: #111827;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  background-color: rgb(19, 76, 174);
 }

@@ -51,8 +51,8 @@ h1 {
   color: #cbd5e1;
 }
 .menu-button {
-  border-bottom-right-radius: 20px;
-  border-top-right-radius: 20px;
+  border-bottom-left-radius: 0px;
+  border-top-left-radius: 0px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   width: 50px;
 }

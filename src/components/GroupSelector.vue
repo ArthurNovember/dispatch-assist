@@ -33,7 +33,6 @@ onMounted(() => {
 </script>
 <template>
   <div class="group-selector">
-    <h3>Select Group</h3>
     <p v-if="isLoading">Loading groups...</p>
     <p v-else-if="errorMessage">{{ errorMessage }}</p>
     <select v-else :value="modelValue ?? ''" @change="handleChange">

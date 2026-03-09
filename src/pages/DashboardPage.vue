@@ -85,7 +85,7 @@ const {
 const {
   incidentSearch,
   createIncidentError,
-  selectedIncidentId,
+
   isEditingIncident,
   isMenuOpen,
   filteredIncidents,

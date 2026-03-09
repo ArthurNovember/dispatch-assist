@@ -17,7 +17,7 @@ import VehicleTripsTable from "../components/VehicleTripsTable.vue";
 import AddressSearch from "../components/AddressSearch.vue";
 import { calculateEtaMinutes, formatEta } from "../utils/eta";
 import { getRoadRoute } from "../services/routing";
-
+import { reverseGeocode } from "../services/geocoding";
 import type { DispatchIncident } from "../types/incidents";
 import {
   detectRoadLocationFromCoordinates,
@@ -42,6 +42,7 @@ const detectedRoadLocation = ref<{
   direction: string | null;
   label: string;
 } | null>(null);
+const selectedIncidentId = ref<string | null>(null);
 
 const isLoadingRoadLocation = ref(false);
 const roadLocationError = ref("");
@@ -105,6 +106,16 @@ const props = defineProps<{
 }>();
 
 function createIncident() {
+  console.log("createIncident clicked", {
+    clientName: incidentForm.clientName,
+    clientPhone: incidentForm.clientPhone,
+    manualRoad: manualRoad.value,
+    manualKm: manualKm.value,
+    dispatchLat: dispatchLocation.lat,
+    dispatchLng: dispatchLocation.lng,
+    selectedVehicle: selectedVehicle.value,
+  });
+
   createIncidentError.value = "";
 
   if (!incidentForm.clientName.trim()) {
@@ -117,17 +128,17 @@ function createIncident() {
     return;
   }
 
-  if (!manualRoad.value.trim()) {
-    createIncidentError.value = "Enter road";
+  if (dispatchLocation.lat === null || dispatchLocation.lng === null) {
+    createIncidentError.value = "Select incident location on map";
     return;
   }
 
-  const km =
-    manualKm.value.trim() === ""
-      ? null
-      : Number(manualKm.value.replace(",", "."));
+  const road = manualRoad.value.trim() || "Unknown road";
 
-  if (manualKm.value.trim() !== "" && !Number.isFinite(km)) {
+  const kmValue = manualKm.value.trim();
+  const km = kmValue === "" ? null : Number(kmValue.replace(",", "."));
+
+  if (kmValue !== "" && !Number.isFinite(km)) {
     createIncidentError.value = "Enter valid KM";
     return;
   }
@@ -144,7 +155,7 @@ function createIncident() {
     vehicleIssue: incidentForm.vehicleIssue.trim(),
     operatorNote: incidentForm.operatorNote.trim(),
 
-    road: manualRoad.value.trim(),
+    road,
     km,
     direction: manualDirection.value.trim(),
 
@@ -170,6 +181,18 @@ function createIncident() {
   incidentForm.clientLicensePlate = "";
   incidentForm.vehicleIssue = "";
   incidentForm.operatorNote = "";
+
+  manualRoad.value = "";
+  manualKm.value = "";
+  manualDirection.value = "";
+
+  dispatchLocation.lat = null;
+  dispatchLocation.lng = null;
+
+  selectedVehicle.value = null;
+
+  selectedIncidentId.value = incident.id;
+  isMenuOpen.value = true;
 }
 
 async function applyRoadLocationToMap() {
@@ -213,6 +236,28 @@ async function applyRoadLocationToMap() {
   }
 }
 
+function openIncident(incidentId: string) {
+  const incident = incidents.value.find((item) => item.id === incidentId);
+  if (!incident) return;
+
+  selectedIncidentId.value = incident.id;
+
+  incidentForm.clientName = incident.clientName;
+  incidentForm.clientPhone = incident.clientPhone;
+  incidentForm.clientLicensePlate = incident.clientLicensePlate;
+  incidentForm.vehicleIssue = incident.vehicleIssue;
+  incidentForm.operatorNote = incident.operatorNote;
+
+  manualRoad.value = incident.road;
+  manualKm.value = incident.km !== null ? incident.km.toFixed(1) : "";
+  manualDirection.value = incident.direction;
+
+  dispatchLocation.lat = incident.location.lat;
+  dispatchLocation.lng = incident.location.lng;
+
+  closeMenu();
+}
+
 async function loadRoadLocationFromIncident() {
   if (dispatchLocation.lat === null || dispatchLocation.lng === null) {
     detectedRoadLocation.value = null;
@@ -229,12 +274,29 @@ async function loadRoadLocationFromIncident() {
       dispatchLocation.lng,
     );
 
-    detectedRoadLocation.value = result;
-    manualRoad.value = result.road ?? "";
-    manualKm.value = result.km !== null ? result.km.toFixed(1) : "";
+    if (result.road || result.km !== null) {
+      detectedRoadLocation.value = result;
+      manualRoad.value = result.road ?? "";
+      manualKm.value = result.km !== null ? result.km.toFixed(1) : "";
+      manualDirection.value = result.direction ?? "";
+      return;
+    }
 
-    manualRoad.value = result.road ?? "";
-    manualKm.value = result.km !== null ? result.km.toFixed(1) : "";
+    const fallback = await reverseGeocode(
+      dispatchLocation.lat,
+      dispatchLocation.lng,
+    );
+
+    detectedRoadLocation.value = {
+      road: fallback?.road ?? null,
+      km: null,
+      direction: null,
+      label: fallback?.label ?? "Unknown location",
+    };
+
+    manualRoad.value = fallback?.road ?? "";
+    manualKm.value = "";
+    manualDirection.value = "";
   } catch (error) {
     roadLocationError.value =
       error instanceof Error ? error.message : "Failed to detect road location";
@@ -310,6 +372,27 @@ async function loadSelectedVehicleTrips() {
   } finally {
     isLoadingTrips.value = false;
   }
+}
+
+function startNewIncident() {
+  selectedIncidentId.value = null;
+
+  incidentForm.clientName = "";
+  incidentForm.clientPhone = "";
+  incidentForm.clientLicensePlate = "";
+  incidentForm.vehicleIssue = "";
+  incidentForm.operatorNote = "";
+
+  manualRoad.value = "";
+  manualKm.value = "";
+  manualDirection.value = "";
+
+  dispatchLocation.lat = null;
+  dispatchLocation.lng = null;
+
+  selectedVehicle.value = null;
+
+  closeMenu();
 }
 
 async function loadSelectedVehicleRoute() {
@@ -451,7 +534,9 @@ watch(
           <button class="drawer-close-button" @click="closeMenu">✕</button>
         </div>
 
-        <button class="primary-button" @click="closeMenu">New incident</button>
+        <button class="primary-button" @click="startNewIncident">
+          New incident
+        </button>
 
         <input
           v-model="incidentSearch"
@@ -469,6 +554,7 @@ watch(
             :key="incident.id"
             class="incident-card incident-card-button"
             type="button"
+            @click="openIncident(incident.id)"
           >
             <div class="incident-card-top">
               <strong>{{ incident.id }}</strong>
@@ -479,8 +565,11 @@ watch(
               <p><strong>Client:</strong> {{ incident.clientName }}</p>
               <p>
                 <strong>Location:</strong>
-                {{ incident.road }} km
-                {{ incident.km !== null ? incident.km.toFixed(1) : "—" }}
+                {{
+                  incident.km !== null
+                    ? `${incident.road} km ${incident.km.toFixed(1)}`
+                    : incident.road
+                }}
               </p>
               <p>
                 <strong>Vehicle:</strong>
@@ -682,11 +771,6 @@ watch(
       />
     </div>
     <div>
-      <div class="road-meta-row">
-        <span class="road-meta-label">Incident summary</span>
-        <strong>{{ roadSummary }}</strong>
-      </div>
-
       <button class="primary-button" @click="createIncident">
         Create incident
       </button>
@@ -968,6 +1052,7 @@ watch(
   border-radius: 14px;
   background: var(--panel-soft);
   padding: 12px;
+  background: #1d4ed8;
 }
 
 .incident-card-top {
@@ -989,7 +1074,7 @@ watch(
 
 .incident-status {
   font-size: 13px;
-  color: var(--text-soft);
+  color: white;
   text-transform: uppercase;
 }
 

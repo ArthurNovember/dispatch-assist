@@ -129,21 +129,7 @@ export async function resolveRoadLocationToCoordinates(
 const RSD_BASE =
   "https://geoportal.rsd.cz/arcgis/rest/services/PrezentaceULS/MapServer";
 
-// podle veřejného katalogu je layer 0 vrstva Km
 const HIGHWAY_MARKERS_LAYER_ID = 1;
-
-function toNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value.replace(",", ".").trim());
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-}
 
 function pickString(
   attrs: Record<string, unknown> | undefined,
@@ -156,20 +142,6 @@ function pickString(
     if (typeof value === "string" && value.trim()) {
       return value.trim();
     }
-  }
-
-  return null;
-}
-
-function pickNumber(
-  attrs: Record<string, unknown> | undefined,
-  keys: string[],
-): number | null {
-  if (!attrs) return null;
-
-  for (const key of keys) {
-    const value = toNumber(attrs[key]);
-    if (value !== null) return value;
   }
 
   return null;

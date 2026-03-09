@@ -58,20 +58,9 @@ const isResolvingRoadLocation = ref(false);
 
 const isMenuOpen = ref(false);
 
-function toggleMenu() {
-  isMenuOpen.value = !isMenuOpen.value;
-}
 function closeMenu() {
   isMenuOpen.value = false;
 }
-
-const roadSummary = computed(() => {
-  const road = manualRoad.value.trim() || "Road";
-  const km = manualKm.value.trim() || "unknown";
-  const direction = manualDirection.value.trim();
-
-  return direction ? `${road} km ${km}, ${direction}` : `${road} km ${km}`;
-});
 
 const incidentForm = reactive({
   clientName: "",
